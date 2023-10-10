@@ -2,55 +2,101 @@ using UnityEngine;
 
 public class SphereSpawner : MonoBehaviour
 {
-    public GameObject spherePrefab; // The sphere prefab.
     public float particleSize; // Radius of the spheres.
     public Vector2 boundsSize; // Half the size of the bounds.
     private Color sphereColor = Color.blue; // Color of the spheres.
-    
 
-    private GameObject currentSphere; // Reference to the currently spawned sphere.
+    public float gravity; // Gravity value (set a default value).
+    public float collisionDamping; // How much velocity is lost on collision (set a default value).
 
-    public float gravity; // Gravity value.
-    public float collisionDamping; // How much velocity is lost on collision.
+    public int numParticles; // Number of particles to spawn.
+    public float particleSpacing; // Spacing between particles (set a default value).
 
+    private Vector3[] velocities; // The velocity of the sphere.
+    private Vector3[] positions; // The position of the sphere.
+
+    private GameObject spherePrefab; // The sphere prefab;
+    private GameObject[] spheres; // Add an array to hold the sphere game objects.
+
+    private bool drawGizmos = true;
     private void Start()
     {
-        particleSize = 1;
-        collisionDamping = 1;
-        SpawnSphere(); // Start by spawning the first sphere.
-    }
+        drawGizmos = false;
+        positions = new Vector3[numParticles];
+        velocities = new Vector3[numParticles];
 
-    private void SpawnSphere()
-    {
-        currentSphere = Instantiate(spherePrefab, transform.position, Quaternion.identity);
-        currentSphere.GetComponent<Renderer>().material.color = sphereColor;
-        velocity = Vector3.zero; // Reset the velocity for the new sphere.
-    }
+        int particlesPerRow = (int)Mathf.Sqrt(numParticles);
+        int particlesPerCol = (numParticles - 1) / particlesPerRow + 1;
+        float spacing = particleSize * 2 + particleSpacing;
+        spheres = new GameObject[numParticles];
 
-    private Vector3 velocity; // The velocity of the sphere.
-    private Vector3 position; // The position of the sphere.
-
-    private void Update()
-    {
-        if (currentSphere != null)
+        for (int i = 0; i < numParticles; i++)
         {
-            velocity += Vector3.down * gravity * Time.deltaTime;
-            position += velocity * Time.deltaTime;
-            ResolveCollisions(position);
-
-            DrawCircle(position, particleSize, sphereColor);
+            float x = (i % particlesPerRow - particlesPerRow / 2 + 0.5f) * spacing;
+            float y = (i / particlesPerRow - particlesPerCol / 2 + 0.5f) * spacing;
+            Vector3 position = new Vector3(x, y, 0);
+            positions[i] = position;
+            // Create a sphere game object and store it in the array.
+            spheres[i] = CreateSphere(position, particleSize, sphereColor);
         }
     }
 
-    private void DrawCircle(Vector3 position, float particleSize, Color color)
+    private void Update()
     {
-        currentSphere.transform.position = position;
-        currentSphere.transform.localScale = Vector3.one * particleSize * 2;
-        currentSphere.GetComponent<Renderer>().material.color = color;
-    }
-    
 
-    private void ResolveCollisions(Vector3 position)
+        for (int i = 0; i < positions.Length; i++)
+        {
+            velocities[i] += Vector3.down * gravity * Time.deltaTime;
+            positions[i] += velocities[i] * Time.deltaTime;
+            ResolveCollisions(ref positions[i], ref velocities[i]);
+
+            DrawCircle(positions[i], particleSize, sphereColor);
+        }
+    }
+
+    private void DrawCircle(Vector3 position, float radius, Color color)
+    {
+        for(int i=0; i < positions.Length; i++)
+        {
+            spheres[i].transform.position = positions[i];
+        }
+    }
+
+    private void OnDrawGizmos()
+    {
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireCube(transform.position, boundsSize);
+
+        if(drawGizmos) {
+            Gizmos.color = sphereColor;
+            int particlesPerRow = (int)Mathf.Sqrt(numParticles);
+            int particlesPerCol = (numParticles - 1) / particlesPerRow + 1;
+            float spacing = particleSize * 2 + particleSpacing;
+            for (int i = 0; i < numParticles; i++)
+            {
+                float x = (i % particlesPerRow - particlesPerRow / 2 + 0.5f) * spacing;
+                float y = (i / particlesPerRow - particlesPerCol / 2 + 0.5f) * spacing;
+                Vector3 position = new Vector3(x, y, 0);
+                // Create a sphere game object and store it in the array.
+                Gizmos.DrawSphere(position, particleSize);
+            }
+        }
+    }
+
+    private GameObject CreateSphere(Vector3 position, float radius, Color color)
+    {
+        GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        sphere.transform.localScale = Vector3.one * radius * 2;
+        sphere.GetComponent<SphereCollider>().enabled = false;
+        sphere.transform.position = position;
+        sphere.GetComponent<Renderer>().material.color = color;
+
+        return sphere;
+
+    }
+
+
+    private void ResolveCollisions(ref Vector3 position, ref Vector3 velocity)
     {
         Vector2 halfBoundsSize = boundsSize / 2 - Vector2.one * particleSize; // The size of the bounds, minus the size of the sphere.
 
