@@ -1,34 +1,47 @@
 using UnityEngine;
+using System.Threading.Tasks;
 
 public class SphereSpawner : MonoBehaviour
 {
     public float particleSize; // Radius of the spheres.
+    private float mass = 1; // Mass of the spheres.
     public Vector2 boundsSize; // Half the size of the bounds.
-    private Color sphereColor = new Color(0.2f, 0.6f, 1f); // Color of the spheres.
+    private Color particleColor = new Color(0.2f, 0.6f, 1f); // Color of the spheres.
 
     public float gravity; // Gravity value (set a default value).
     public float collisionDamping; // How much velocity is lost on collision (set a default value).
 
     public int numParticles; // Number of particles to spawn.
-    public float particleSpacing; // Spacing between particles (set a default value).
+    private float particleSpacing; // Spacing between particles (set a default value).
+
+    private float smoothingRadius; // Radius of the smoothing kernel (set a default value).
 
     private Vector3[] velocities; // The velocity of the sphere.
     private Vector3[] positions; // The position of the sphere.
+    private float[] particleProperties; // The property of the sphere.
 
     private GameObject spherePrefab; // The sphere prefab;
-    private GameObject[] spheres; // Add an array to hold the sphere game objects.
+    private GameObject[] particles; // Add an array to hold the sphere game objects.
 
-    private bool drawGizmos = true;
+    private bool started = true;
+    private bool drawGizmos = false;
+    
     private void Start()
     {
-        drawGizmos = false;
+        started = true;
+        /*numParticles = 1;
+        particleSize = 0.3f;
+        particleSpacing = 0.2f;*/
+
         positions = new Vector3[numParticles];
         velocities = new Vector3[numParticles];
+        particles = new GameObject[numParticles];
+        particleProperties = new float[numParticles];
+        densities = new float[numParticles];
 
-        int particlesPerRow = (int)Mathf.Sqrt(numParticles);
+        /*int particlesPerRow = (int)Mathf.Sqrt(numParticles);
         int particlesPerCol = (numParticles - 1) / particlesPerRow + 1;
         float spacing = particleSize * 2 + particleSpacing;
-        spheres = new GameObject[numParticles];
 
         for (int i = 0; i < numParticles; i++)
         {
@@ -37,28 +50,26 @@ public class SphereSpawner : MonoBehaviour
             Vector3 position = new Vector3(x, y, 0);
             positions[i] = position;
             // Create a sphere game object and store it in the array.
-            spheres[i] = CreateSphere(position, particleSize, sphereColor);
-        }
+            particles[i] = CreateParticle(position, particleSize, particleColor);
+        }*/
+        CreateParticles(12);
+        UpdateDensities();
     }
 
     private void Update()
     {
-
+        SimulationStep(Time.deltaTime);
         for (int i = 0; i < positions.Length; i++)
         {
-            velocities[i] += Vector3.down * gravity * Time.deltaTime;
-            positions[i] += velocities[i] * Time.deltaTime;
-            ResolveCollisions(ref positions[i], ref velocities[i]);
-
-            DrawCircle(i, particleSize, sphereColor);
+            DrawCircle(i, particleSize, particleColor);
         }
     }
 
     private void DrawCircle(int index, float size, Color color)
     {
-        spheres[index].transform.position = positions[index];
-        spheres[index].GetComponent<Renderer>().material.color = color;
-        spheres[index].transform.localScale = Vector3.one * size * 2;
+        particles[index].transform.position = positions[index];
+        particles[index].GetComponent<Renderer>().material.color = color;
+        particles[index].transform.localScale = Vector3.one * size * 2;
     }
 
     private void OnDrawGizmos()
@@ -66,8 +77,8 @@ public class SphereSpawner : MonoBehaviour
         Gizmos.color = Color.green;
         Gizmos.DrawWireCube(transform.position, boundsSize);
 
-        if(drawGizmos) {
-            Gizmos.color = sphereColor;
+        if(started && drawGizmos) {
+            Gizmos.color = particleColor;
             int particlesPerRow = (int)Mathf.Sqrt(numParticles);
             int particlesPerCol = (numParticles - 1) / particlesPerRow + 1;
             float spacing = particleSize * 2 + particleSpacing;
@@ -81,16 +92,29 @@ public class SphereSpawner : MonoBehaviour
         }
     }
 
-    private GameObject CreateSphere(Vector3 position, float radius, Color color)
+    private GameObject CreateParticle(Vector3 position)
     {
-        GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        sphere.transform.localScale = Vector3.one * radius * 2;
-        sphere.GetComponent<SphereCollider>().enabled = false;
-        sphere.transform.position = position;
-        sphere.GetComponent<Renderer>().material.color = color;
+        GameObject particle = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        particle.transform.localScale = Vector3.one * particleSize * 2;
+        particle.GetComponent<SphereCollider>().enabled = false;
+        particle.transform.position = position;
+        particle.GetComponent<Renderer>().material.color = particleColor;
 
-        return sphere;
+        return particle;
+    }
 
+    private void CreateParticles(int seed)
+    {
+        System.Random rng = new System.Random(seed);
+        smoothingRadius = particleSize*4;
+        for (int i = 0; i < positions.Length; i++)
+        {
+            float x = (float)(rng.NextDouble() - 0.5) * boundsSize.x;
+            float y = (float)(rng.NextDouble() - 0.5) * boundsSize.y;
+            positions[i] = new Vector3(x, y, 0);
+            velocities[i] = Vector3.zero;
+            particles[i] = CreateParticle(positions[i]);
+        }
     }
 
 
@@ -109,4 +133,101 @@ public class SphereSpawner : MonoBehaviour
             velocity.y *= -1 * collisionDamping;
         }
     }
+
+    static float SmoothingKernel(float radius, float dst)
+    {
+        float volume = Mathf.PI * Mathf.Pow(radius, 8) * 4; // Used to normalize the kernel
+        float value = Mathf.Max(0, radius * radius - dst * dst);
+        return value * value * value / volume;
+    }
+
+    static float SmoothingKernelDerivative(float dst, float radius)
+    {
+        if (dst >= radius) return 0;
+        float f = radius * radius - dst * dst;
+        float scale = -24 / (Mathf.PI * Mathf.Pow(radius, 8));
+        return scale * dst * f * f;
+    }
+
+    private float CalculateDensity(Vector3 samplePoint)
+    {
+        float density = 0;
+
+        foreach(Vector3 position in positions)
+        {
+            float dst = (position - samplePoint).magnitude;
+            float influence = SmoothingKernel(smoothingRadius, dst);
+            density += mass * influence;
+        }
+
+        return density;
+    }
+
+    private float[] densities;
+    private void UpdateDensities()
+    {
+        Parallel.For(0, numParticles, i => {
+            densities[i] = CalculateDensity(positions[i]);
+        });
+    }
+
+    public float targetDensity;
+    public float pressureMultiplier;
+    private float ConvertDensityToPressure(float density)
+    {
+        float densityError = density - targetDensity;
+        float pressure = densityError * pressureMultiplier;
+        return pressure;
+    }
+    
+    private Vector3 CalculatePressureForce(int particleIndex)
+    {
+        Vector3 pressureForce = Vector3.zero;
+
+        for (int otherParticleIndex = 0; otherParticleIndex < numParticles; otherParticleIndex++)
+        {
+            if(particleIndex == otherParticleIndex) continue;
+
+            Vector3 offset = positions[otherParticleIndex] - positions[particleIndex];
+            float dst = offset.magnitude;
+            Vector3 dir = dst == 0 ? GetRandomDir(): offset / dst;
+            
+            float slope = SmoothingKernelDerivative(dst, smoothingRadius);
+            float density = densities[otherParticleIndex];
+            pressureForce += -ConvertDensityToPressure(density) * dir * slope * mass / density;
+        }
+        return pressureForce;
+    }
+
+    private Vector3 GetRandomDir()
+    {
+        System.Random rng = new System.Random();
+        float x = (float)(rng.NextDouble() - 0.5);
+        float y = (float)(rng.NextDouble() - 0.5);
+        float z = 0;
+        return new Vector3(x, y, z);
+    }
+
+    private void SimulationStep(float deltaTime)
+    {
+        Parallel.For(0, numParticles, i =>
+        {
+            velocities[i] += Vector3.down * gravity * deltaTime;
+            densities[i] = CalculateDensity(positions[i]);
+        });
+
+        Parallel.For(0, numParticles, i =>
+        {
+            Vector3 pressureForce = CalculatePressureForce(i);
+            Vector3 pressureAcceleration = pressureForce / densities[i]; // a = F/m
+            velocities[i] += pressureAcceleration * deltaTime;
+        });
+
+        Parallel.For(0, numParticles, i =>
+        {
+            positions[i] += velocities[i] * deltaTime;
+            ResolveCollisions(ref positions[i], ref velocities[i]);
+        });
+    }
+    
 }
