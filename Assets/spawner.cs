@@ -4,7 +4,7 @@ public class SphereSpawner : MonoBehaviour
 {
     public float particleSize; // Radius of the spheres.
     public Vector2 boundsSize; // Half the size of the bounds.
-    private Color sphereColor = Color.blue; // Color of the spheres.
+    private Color sphereColor = new Color(0.2f, 0.6f, 1f); // Color of the spheres.
 
     public float gravity; // Gravity value (set a default value).
     public float collisionDamping; // How much velocity is lost on collision (set a default value).
@@ -50,16 +50,15 @@ public class SphereSpawner : MonoBehaviour
             positions[i] += velocities[i] * Time.deltaTime;
             ResolveCollisions(ref positions[i], ref velocities[i]);
 
-            DrawCircle(positions[i], particleSize, sphereColor);
+            DrawCircle(i, particleSize, sphereColor);
         }
     }
 
-    private void DrawCircle(Vector3 position, float radius, Color color)
+    private void DrawCircle(int index, float size, Color color)
     {
-        for(int i=0; i < positions.Length; i++)
-        {
-            spheres[i].transform.position = positions[i];
-        }
+        spheres[index].transform.position = positions[index];
+        spheres[index].GetComponent<Renderer>().material.color = color;
+        spheres[index].transform.localScale = Vector3.one * size * 2;
     }
 
     private void OnDrawGizmos()
@@ -77,7 +76,6 @@ public class SphereSpawner : MonoBehaviour
                 float x = (i % particlesPerRow - particlesPerRow / 2 + 0.5f) * spacing;
                 float y = (i / particlesPerRow - particlesPerCol / 2 + 0.5f) * spacing;
                 Vector3 position = new Vector3(x, y, 0);
-                // Create a sphere game object and store it in the array.
                 Gizmos.DrawSphere(position, particleSize);
             }
         }
