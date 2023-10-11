@@ -106,7 +106,7 @@ public class SphereSpawner : MonoBehaviour
     private void CreateParticles(int seed)
     {
         System.Random rng = new System.Random(seed);
-        smoothingRadius = particleSize*4;
+        smoothingRadius = particleSize*5;
         for (int i = 0; i < positions.Length; i++)
         {
             float x = (float)(rng.NextDouble() - 0.5) * boundsSize.x;
@@ -137,14 +137,14 @@ public class SphereSpawner : MonoBehaviour
     static float SmoothingKernel(float radius, float dst)
     {
         float volume = Mathf.PI * Mathf.Pow(radius, 8) * 4; // Used to normalize the kernel
-        float value = Mathf.Max(0, radius * radius - dst * dst);
+        float value = Mathf.Max(0, radius  - dst);
         return value * value * value / volume;
     }
 
     static float SmoothingKernelDerivative(float dst, float radius)
     {
         if (dst >= radius) return 0;
-        float f = radius * radius - dst * dst;
+        float f = radius - dst ;
         float scale = -24 / (Mathf.PI * Mathf.Pow(radius, 8));
         return scale * dst * f * f;
     }
@@ -188,11 +188,11 @@ public class SphereSpawner : MonoBehaviour
         {
             if(particleIndex == otherParticleIndex) continue;
 
-            Vector3 offset = positions[otherParticleIndex] - positions[particleIndex];
-            float dst = offset.magnitude;
-            Vector3 dir = dst == 0 ? GetRandomDir(): offset / dst;
+            Vector3 offset = positions[otherParticleIndex] - positions[particleIndex]; // Offset between the two particles
+            float dst = offset.magnitude; // Distance between the two particles
+            Vector3 dir = dst == 0 ? GetRandomDir(): offset / dst; // If they are at the same position, use a random direction
             
-            float slope = SmoothingKernelDerivative(dst, smoothingRadius);
+            float slope = SmoothingKernelDerivative(dst, smoothingRadius); // The slope of the smoothing kernel at the distance between the two particles
             float density = densities[otherParticleIndex];
             pressureForce += -ConvertDensityToPressure(density) * dir * slope * mass / density;
         }
