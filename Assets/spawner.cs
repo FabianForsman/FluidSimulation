@@ -14,7 +14,7 @@ public class SphereSpawner : MonoBehaviour
     public int numParticles; // Number of particles to spawn.
     private float particleSpacing; // Spacing between particles (set a default value).
 
-    private float smoothingRadius; // Radius of the smoothing kernel (set a default value).
+    public float smoothingRadius; // Radius of the smoothing kernel (set a default value).
 
     private Vector3[] velocities; // The velocity of the sphere.
     private Vector3[] positions; // The position of the sphere.
@@ -106,7 +106,7 @@ public class SphereSpawner : MonoBehaviour
     private void CreateParticles(int seed)
     {
         System.Random rng = new System.Random(seed);
-        smoothingRadius = particleSize*5;
+        smoothingRadius = particleSize * 4;
         for (int i = 0; i < positions.Length; i++)
         {
             float x = (float)(rng.NextDouble() - 0.5) * boundsSize.x;
@@ -136,17 +136,18 @@ public class SphereSpawner : MonoBehaviour
 
     static float SmoothingKernel(float radius, float dst)
     {
-        float volume = Mathf.PI * Mathf.Pow(radius, 8) * 4; // Used to normalize the kernel
-        float value = Mathf.Max(0, radius  - dst);
-        return value * value * value / volume;
+        if (dst >= radius) return 0;
+
+        float volume = Mathf.PI * Mathf.Pow(radius, 4) / 6; // Used to normalize the kernel
+        return (radius - dst) * (radius - dst) / volume;
     }
 
     static float SmoothingKernelDerivative(float dst, float radius)
     {
         if (dst >= radius) return 0;
-        float f = radius - dst ;
-        float scale = -24 / (Mathf.PI * Mathf.Pow(radius, 8));
-        return scale * dst * f * f;
+
+        float scale = 12 / (Mathf.PI * Mathf.Pow(radius, 4));
+        return (dst - radius) * scale;
     }
 
     private float CalculateDensity(Vector3 samplePoint)
@@ -194,7 +195,7 @@ public class SphereSpawner : MonoBehaviour
             
             float slope = SmoothingKernelDerivative(dst, smoothingRadius); // The slope of the smoothing kernel at the distance between the two particles
             float density = densities[otherParticleIndex];
-            pressureForce += -ConvertDensityToPressure(density) * dir * slope * mass / density;
+            pressureForce += ConvertDensityToPressure(density) * dir * slope * mass / density;
         }
         return pressureForce;
     }
@@ -220,7 +221,7 @@ public class SphereSpawner : MonoBehaviour
         {
             Vector3 pressureForce = CalculatePressureForce(i);
             Vector3 pressureAcceleration = pressureForce / densities[i]; // a = F/m
-            velocities[i] += pressureAcceleration * deltaTime;
+            velocities[i] = pressureAcceleration * deltaTime;
         });
 
         Parallel.For(0, numParticles, i =>
