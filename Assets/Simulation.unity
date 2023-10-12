@@ -153,11 +153,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   particleSize: 0.2
-  boundsSize: {x: 33, y: 21.17}
-  gravity: 10
-  collisionDamping: 0.7
-  numParticles: 306
-  particleSpacing: 0.1
+  boundsSize: {x: 56.1, y: 29.2}
+  gravity: 0
+  collisionDamping: 0.8
+  numParticles: 402
+  smoothingRadius: 0
+  targetDensity: 10
+  pressureMultiplier: 500
 --- !u!4 &74031862
 Transform:
   m_ObjectHideFlags: 0
@@ -365,7 +367,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 40, y: 30, z: 0.2}
+  m_LocalScale: {x: 60, y: 35, z: 0.2}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
