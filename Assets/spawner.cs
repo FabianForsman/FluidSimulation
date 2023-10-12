@@ -38,6 +38,7 @@ public class SphereSpawner : MonoBehaviour
         particles = new GameObject[numParticles];
         particleProperties = new float[numParticles];
         densities = new float[numParticles];
+        smoothingRadius = particleSize * 10;
 
         /*int particlesPerRow = (int)Mathf.Sqrt(numParticles);
         int particlesPerCol = (numParticles - 1) / particlesPerRow + 1;
@@ -106,7 +107,6 @@ public class SphereSpawner : MonoBehaviour
     private void CreateParticles(int seed)
     {
         System.Random rng = new System.Random(seed);
-        smoothingRadius = particleSize * 4;
         for (int i = 0; i < positions.Length; i++)
         {
             float x = (float)(rng.NextDouble() - 0.5) * boundsSize.x;
@@ -134,6 +134,7 @@ public class SphereSpawner : MonoBehaviour
         }
     }
 
+    // Smoothing kernel for SPH fluids (https://en.wikipedia.org/wiki/Smoothed-particle_hydrodynamics)
     static float SmoothingKernel(float radius, float dst)
     {
         if (dst >= radius) return 0;
@@ -142,6 +143,7 @@ public class SphereSpawner : MonoBehaviour
         return (radius - dst) * (radius - dst) / volume;
     }
 
+    
     static float SmoothingKernelDerivative(float dst, float radius)
     {
         if (dst >= radius) return 0;
@@ -195,7 +197,7 @@ public class SphereSpawner : MonoBehaviour
             
             float slope = SmoothingKernelDerivative(dst, smoothingRadius); // The slope of the smoothing kernel at the distance between the two particles
             float density = densities[otherParticleIndex];
-            pressureForce += ConvertDensityToPressure(density) * dir * slope * mass / density;
+            pressureForce += -ConvertDensityToPressure(density) * dir * slope * mass / density;
         }
         return pressureForce;
     }
@@ -221,7 +223,7 @@ public class SphereSpawner : MonoBehaviour
         {
             Vector3 pressureForce = CalculatePressureForce(i);
             Vector3 pressureAcceleration = pressureForce / densities[i]; // a = F/m
-            velocities[i] = pressureAcceleration * deltaTime;
+            velocities[i] += pressureAcceleration * deltaTime;
         });
 
         Parallel.For(0, numParticles, i =>
