@@ -39,6 +39,8 @@ public class SphereSpawner : MonoBehaviour
         particleProperties = new float[numParticles];
         densities = new float[numParticles];
         smoothingRadius = particleSize * 10;
+        collisionDamping = 0.8f;
+        boundsSize = new Vector2(50, 30);
 
         /*int particlesPerRow = (int)Mathf.Sqrt(numParticles);
         int particlesPerCol = (numParticles - 1) / particlesPerRow + 1;
@@ -69,7 +71,7 @@ public class SphereSpawner : MonoBehaviour
     private void DrawCircle(int index, float size, Color color)
     {
         particles[index].transform.position = positions[index];
-        particles[index].GetComponent<Renderer>().material.color = color;
+        particles[index].GetComponent<Renderer>().material.color = particleColor;
         particles[index].transform.localScale = Vector3.one * size * 2;
     }
 
@@ -223,7 +225,7 @@ public class SphereSpawner : MonoBehaviour
         {
             Vector3 pressureForce = CalculatePressureForce(i);
             Vector3 pressureAcceleration = pressureForce / densities[i]; // a = F/m
-            velocities[i] += pressureAcceleration * deltaTime;
+            velocities[i] = pressureAcceleration * deltaTime;
         });
 
         Parallel.For(0, numParticles, i =>

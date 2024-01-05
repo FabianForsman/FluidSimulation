@@ -159,7 +159,7 @@ MonoBehaviour:
   numParticles: 402
   smoothingRadius: 0
   targetDensity: 10
-  pressureMultiplier: 500
+  pressureMultiplier: 3
 --- !u!4 &74031862
 Transform:
   m_ObjectHideFlags: 0
