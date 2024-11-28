@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Threading.Tasks;
+using System;
 
 public class SphereSpawner : MonoBehaviour
 {
@@ -23,16 +24,42 @@ public class SphereSpawner : MonoBehaviour
     private GameObject spherePrefab; // The sphere prefab;
     private GameObject[] particles; // Add an array to hold the sphere game objects.
 
-    private bool started = true;
-    private bool drawGizmos = false;
+    private bool started = false;
+    private bool drawGizmos = true;
+
+    private Vector3[] points;
+    private float radius;
+    private Entry[] spatialLookup;
+    private int[] startIndicies;
+    private readonly (int x, int y)[] cellOfsets = new (int x, int y)[] {
+        (0, 0), (1, 0), (0, 1), (-1, 0), (0, -1),
+        (1, 1), (-1, 1), (-1, -1), (1, -1)
+    };
+
+    private struct Entry : IComparable<Entry>
+{
+    public int pointIndex;
+    public uint cellKey;
+
+    public Entry(int pointIndex, uint cellKey)
+    {
+        this.pointIndex = pointIndex;
+        this.cellKey = cellKey;
+    }
+
+    public int CompareTo(Entry other)
+    {
+        // Compare by cellKey (you can change this if you want to compare by a different field)
+        return this.cellKey.CompareTo(other.cellKey);
+    }
+}
+
     
     private void Start()
     {
         started = true;
-        /*numParticles = 1;
-        particleSize = 0.3f;
-        particleSpacing = 0.2f;*/
-
+        gravity = 0; //9.81f;
+        numParticles = 1500;
         positions = new Vector3[numParticles];
         velocities = new Vector3[numParticles];
         particles = new GameObject[numParticles];
@@ -40,30 +67,38 @@ public class SphereSpawner : MonoBehaviour
         densities = new float[numParticles];
         smoothingRadius = particleSize * 10;
         collisionDamping = 0.8f;
-        boundsSize = new Vector2(50, 30);
+        boundsSize = new Vector3(50, 30, 40);
+        pressureMultiplier = 3;
+        targetDensity = 8f;
 
-        /*int particlesPerRow = (int)Mathf.Sqrt(numParticles);
+        spatialLookup = new Entry[numParticles];
+        startIndicies = new int[numParticles];
+
+        int particlesPerRow = (int)Mathf.Sqrt(numParticles);
         int particlesPerCol = (numParticles - 1) / particlesPerRow + 1;
         float spacing = particleSize * 2 + particleSpacing;
 
-        for (int i = 0; i < numParticles; i++)
+        /*for (int i = 0; i < numParticles; i++)
         {
             float x = (i % particlesPerRow - particlesPerRow / 2 + 0.5f) * spacing;
             float y = (i / particlesPerRow - particlesPerCol / 2 + 0.5f) * spacing;
             Vector3 position = new Vector3(x, y, 0);
             positions[i] = position;
             // Create a sphere game object and store it in the array.
-            particles[i] = CreateParticle(position, particleSize, particleColor);
+            particles[i] = CreateParticle(position);
         }*/
-        CreateParticles(12);
+
+        CreateParticles(numParticles);
         UpdateDensities();
     }
 
     private void Update()
     {
         SimulationStep(Time.deltaTime);
+        UpdateSpatialLookup(positions, smoothingRadius);
         for (int i = 0; i < positions.Length; i++)
         {
+            ForeachPointWithinRadius(positions[i]);
             DrawCircle(i, particleSize, particleColor);
         }
     }
@@ -80,7 +115,7 @@ public class SphereSpawner : MonoBehaviour
         Gizmos.color = Color.green;
         Gizmos.DrawWireCube(transform.position, boundsSize);
 
-        if(started && drawGizmos) {
+        if(!started && drawGizmos) {
             Gizmos.color = particleColor;
             int particlesPerRow = (int)Mathf.Sqrt(numParticles);
             int particlesPerCol = (numParticles - 1) / particlesPerRow + 1;
@@ -92,7 +127,7 @@ public class SphereSpawner : MonoBehaviour
                 Vector3 position = new Vector3(x, y, 0);
                 Gizmos.DrawSphere(position, particleSize);
             }
-        }
+        }        
     }
 
     private GameObject CreateParticle(Vector3 position)
@@ -106,9 +141,9 @@ public class SphereSpawner : MonoBehaviour
         return particle;
     }
 
-    private void CreateParticles(int seed)
+    private void CreateParticles(int nr)
     {
-        System.Random rng = new System.Random(seed);
+        System.Random rng = new System.Random(nr);
         for (int i = 0; i < positions.Length; i++)
         {
             float x = (float)(rng.NextDouble() - 0.5) * boundsSize.x;
@@ -181,7 +216,7 @@ public class SphereSpawner : MonoBehaviour
     private float ConvertDensityToPressure(float density)
     {
         float densityError = density - targetDensity;
-        float pressure = densityError * pressureMultiplier;
+        float pressure = densityError * -pressureMultiplier;
         return pressure;
     }
     
@@ -199,9 +234,17 @@ public class SphereSpawner : MonoBehaviour
             
             float slope = SmoothingKernelDerivative(dst, smoothingRadius); // The slope of the smoothing kernel at the distance between the two particles
             float density = densities[otherParticleIndex];
-            pressureForce += -ConvertDensityToPressure(density) * dir * slope * mass / density;
+            float sharedPressure = CalculateSharedPressure(density, densities[particleIndex]);
+            pressureForce += sharedPressure * dir * slope * mass / density;
         }
         return pressureForce;
+    }
+
+    private float CalculateSharedPressure(float densityA, float densityB)
+    {
+        float pressureA = ConvertDensityToPressure(densityA);
+        float pressureB = ConvertDensityToPressure(densityB);
+        return (pressureA + pressureB) / 2;
     }
 
     private Vector3 GetRandomDir()
@@ -217,7 +260,7 @@ public class SphereSpawner : MonoBehaviour
     {
         Parallel.For(0, numParticles, i =>
         {
-            velocities[i] += Vector3.down * gravity * deltaTime;
+            velocities[i] -= Vector3.down * -gravity * deltaTime;
             densities[i] = CalculateDensity(positions[i]);
         });
 
@@ -225,7 +268,7 @@ public class SphereSpawner : MonoBehaviour
         {
             Vector3 pressureForce = CalculatePressureForce(i);
             Vector3 pressureAcceleration = pressureForce / densities[i]; // a = F/m
-            velocities[i] = pressureAcceleration * deltaTime;
+            velocities[i] += pressureAcceleration * deltaTime;
         });
 
         Parallel.For(0, numParticles, i =>
@@ -233,6 +276,72 @@ public class SphereSpawner : MonoBehaviour
             positions[i] += velocities[i] * deltaTime;
             ResolveCollisions(ref positions[i], ref velocities[i]);
         });
+    }
+
+    public void UpdateSpatialLookup(Vector3[] points, float radius)
+    {
+        Parallel.For(0, points.Length, i =>
+        {
+            (int cellX, int cellY) = PositionToCellCoord(points[i], radius);
+            uint cellKey = GetKeyFromHash(HashCell(cellX, cellY));
+            spatialLookup[i] = new Entry(i, cellKey);
+            startIndicies[i] = int.MaxValue;
+        });
+
+        Array.Sort(spatialLookup);
+
+        Parallel.For(0, points.Length, i =>
+        {
+            uint key = spatialLookup[i].cellKey;
+            uint keyPrev = i == 0 ? uint.MaxValue : spatialLookup[i - 1].cellKey;
+            if (key != keyPrev)
+            {
+                startIndicies[key] = i;
+            }
+        });
+    }
+
+    public (int x, int y) PositionToCellCoord(Vector3 point, float radius)
+    {
+        int x = (int)(point.x / radius);
+        int y = (int)(point.y / radius);
+        return (x, y);
+    }
+
+    public uint HashCell(int x, int y)
+    {
+        uint a = (uint)x * 15823;
+        uint b = (uint)y * 9737333;
+        return a + b;
+    }
+
+    public uint GetKeyFromHash(uint hash)
+    {
+        return hash % (uint) spatialLookup.Length;
+    }
+
+    public void ForeachPointWithinRadius(Vector3 samplePoint)
+    {
+        (int centreX, int centreY) = PositionToCellCoord(samplePoint, radius);
+        float sqrRadius = radius * radius;
+
+        foreach ((int offsetX, int offsetY) in cellOfsets)
+        {
+            uint key = GetKeyFromHash(HashCell(centreX + offsetX, centreY + offsetY));
+            int cellStartIndex = startIndicies[key];
+
+            for (int i = cellStartIndex; i < spatialLookup.Length; i++)
+            {
+                if (spatialLookup[i].cellKey != key) break;
+
+                int particleIndex = spatialLookup[i].pointIndex;
+                float sqrDst = (positions[particleIndex] - samplePoint).sqrMagnitude;
+                if (sqrDst <= sqrRadius)
+                {
+                    DrawCircle(particleIndex, particleSize * 1.5f, Color.red);
+                }
+            }
+        }
     }
     
 }

@@ -156,9 +156,9 @@ MonoBehaviour:
   boundsSize: {x: 56.1, y: 29.2}
   gravity: 0
   collisionDamping: 0.8
-  numParticles: 402
+  numParticles: 2970
   smoothingRadius: 0
-  targetDensity: 10
+  targetDensity: 2.5
   pressureMultiplier: 3
 --- !u!4 &74031862
 Transform:
